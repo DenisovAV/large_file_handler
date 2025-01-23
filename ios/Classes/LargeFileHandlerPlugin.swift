@@ -5,6 +5,26 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
 
   private var eventSink: FlutterEventSink?
 
+  private enum FileError: Error {
+    case invalidArguments
+    case assetNotFound
+    case invalidURL
+    case downloadFailed
+    
+    var flutterError: FlutterError {
+      switch self {
+      case .invalidArguments:
+        return FlutterError(code: "INVALID_ARGUMENT", message: "Invalid arguments", details: nil)
+      case .assetNotFound:
+        return FlutterError(code: "NOT_FOUND", message: "Asset not found", details: nil)
+      case .invalidURL:
+        return FlutterError(code: "INVALID_URL", message: "Invalid URL provided", details: nil)
+      case .downloadFailed:
+        return FlutterError(code: "DOWNLOAD_ERROR", message: "Failed to download file", details: nil)
+      }
+    }
+  }
+
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "large_file_handler", binaryMessenger: registrar.messenger())
     let eventChannel = FlutterEventChannel(name: "file_download_progress", binaryMessenger: registrar.messenger())
@@ -35,18 +55,18 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
     }
   }
 
-private func handleFileExists(call: FlutterMethodCall, result: @escaping FlutterResult) {
+  private func handleFileExists(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = extractArguments(call: call, requiredKeys: ["targetPath"]),
           let targetPath = args["targetPath"] as? String else {
-        result(FlutterError(code: "INVALID_ARGUMENT", message: "Invalid arguments", details: nil))
-        return
+      result(FlutterError(code: "INVALID_ARGUMENT", message: "Invalid arguments", details: nil))
+      return
     }
 
     let fileExists = FileManager.default.fileExists(atPath: targetPath)
     result(fileExists)
-}
+  }
 
-private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterResult) {
+  private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = extractArguments(call: call, requiredKeys: ["assetName", "targetPath"]),
           let assetName = args["assetName"] as? String,
           let targetPath = args["targetPath"] as? String else {
@@ -67,7 +87,6 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
       }
     }
   }
-
 
   private func handleCopyAssetWithProgress(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = extractArguments(call: call, requiredKeys: ["assetName", "targetPath"]),
@@ -134,47 +153,51 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
     do {
       let flutterAssetPath = FlutterDartProject.lookupKey(forAsset: assetName)
       guard let bundleAssetPath = Bundle.main.path(forResource: flutterAssetPath, ofType: nil) else {
-        throw NSError(domain: "Asset not found", code: 404, userInfo: nil)
+        throw FileError.assetNotFound
       }
 
-      let totalBytes = try FileManager.default.attributesOfItem(atPath: bundleAssetPath)[.size] as? Int64 ?? 0
-      var bytesWritten: Int64 = 0
-
-      let bufferSize = 1024
-      let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-
-      let inputStream = InputStream(fileAtPath: bundleAssetPath)!
-      let outputStream = OutputStream(toFileAtPath: targetPath, append: false)!
-      inputStream.open()
-      outputStream.open()
-
-      defer {
-        inputStream.close()
-        outputStream.close()
-        buffer.deallocate()
+      try ensureDirectoryExists(for: targetPath)
+      try removeExistingFile(at: targetPath)
+      
+      try copyFileWithProgress(from: bundleAssetPath, to: targetPath) { progress in
+        self.reportProgress(progress)
       }
-
-      while inputStream.hasBytesAvailable {
-        let bytesRead = inputStream.read(buffer, maxLength: bufferSize)
-        if bytesRead <= 0 { break }
-        outputStream.write(buffer, maxLength: bytesRead)
-        bytesWritten += Int64(bytesRead)
-        let progress = (Double(bytesWritten) / Double(totalBytes)) * 100
-        DispatchQueue.main.async {
-          self.eventSink?(Int(progress))
-        }
-      }
-
-      DispatchQueue.main.async {
-        self.eventSink?(100)
-        self.eventSink?(FlutterEndOfEventStream)
-        self.eventSink = nil
-        result(nil)
-      }
+      
+      completeProgress(result: result)
     } catch {
       DispatchQueue.main.async {
-        result(FlutterError(code: "ERROR", message: "Failed to copy asset with progress", details: error.localizedDescription))
+        result(FlutterError(code: "ERROR", message: "Failed to copy asset", details: error.localizedDescription))
       }
+    }
+  }
+
+  private func copyFileWithProgress(from sourcePath: String, to targetPath: String, progressCallback: (Int) -> Void) throws {
+    let totalBytes = try FileManager.default.attributesOfItem(atPath: sourcePath)[.size] as? Int64 ?? 0
+    var bytesWritten: Int64 = 0
+    
+    let bufferSize = 1024 * 1024 // Increased buffer size to 1MB for better performance
+    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+    defer { buffer.deallocate() }
+    
+    guard let inputStream = InputStream(fileAtPath: sourcePath),
+          let outputStream = OutputStream(toFileAtPath: targetPath, append: false) else {
+      throw FileError.downloadFailed
+    }
+    
+    inputStream.open()
+    outputStream.open()
+    defer {
+      inputStream.close()
+      outputStream.close()
+    }
+    
+    while inputStream.hasBytesAvailable {
+      let bytesRead = inputStream.read(buffer, maxLength: bufferSize)
+      if bytesRead <= 0 { break }
+      outputStream.write(buffer, maxLength: bytesRead)
+      bytesWritten += Int64(bytesRead)
+      let progress = Int((Double(bytesWritten) / Double(totalBytes)) * 100)
+      progressCallback(progress)
     }
   }
 
@@ -233,12 +256,14 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
   private func downloadFileWithProgress(from url: String, targetPath: String, result: @escaping FlutterResult) {
     guard let downloadUrl = URL(string: url) else {
       DispatchQueue.main.async {
-        result(FlutterError(code: "DOWNLOAD_ERROR", message: "Invalid URL", details: nil))
+        result(FileError.invalidURL.flutterError)
       }
       return
     }
 
-    let task = URLSession.shared.downloadTask(with: downloadUrl) { (tempURL, response, error) in
+    let task = URLSession.shared.downloadTask(with: downloadUrl) { [weak self] (tempURL, response, error) in
+      guard let self = self else { return }
+      
       if let error = error {
         DispatchQueue.main.async {
           result(FlutterError(code: "DOWNLOAD_ERROR", message: error.localizedDescription, details: nil))
@@ -248,23 +273,16 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
 
       guard let tempURL = tempURL else {
         DispatchQueue.main.async {
-          result(FlutterError(code: "DOWNLOAD_ERROR", message: "Download failed", details: nil))
+          result(FileError.downloadFailed.flutterError)
         }
         return
       }
 
-      let totalBytes = response?.expectedContentLength ?? 0
-      var bytesWritten: Int64 = 0
-
       do {
-        let fileURL = URL(fileURLWithPath: targetPath)
-        try FileManager.default.moveItem(at: tempURL, to: fileURL)
-
-        bytesWritten = totalBytes
-        DispatchQueue.main.async {
-          self.eventSink?(100)
-          result(nil)
-        }
+        try self.ensureDirectoryExists(for: targetPath)
+        try self.removeExistingFile(at: targetPath)
+        try FileManager.default.moveItem(at: tempURL, to: URL(fileURLWithPath: targetPath))
+        self.completeProgress(result: result)
       } catch {
         DispatchQueue.main.async {
           result(FlutterError(code: "DOWNLOAD_ERROR", message: "Error during file download", details: error.localizedDescription))
@@ -273,8 +291,34 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
     }
 
     task.resume()
-
     task.progress.addObserver(self, forKeyPath: #keyPath(Progress.fractionCompleted), options: [.new], context: nil)
+  }
+
+  private func reportProgress(_ progress: Int) {
+    DispatchQueue.main.async { [weak self] in
+      self?.eventSink?(progress)
+    }
+  }
+
+  private func completeProgress(result: @escaping FlutterResult) {
+    DispatchQueue.main.async { [weak self] in
+      self?.eventSink?(100)
+      self?.eventSink?(FlutterEndOfEventStream)
+      self?.eventSink = nil
+      result(nil)
+    }
+  }
+
+  private func ensureDirectoryExists(for path: String) throws {
+    let directory = (path as NSString).deletingLastPathComponent
+    try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+  }
+
+  private func removeExistingFile(at path: String) throws {
+    let fileManager = FileManager.default
+    if fileManager.fileExists(atPath: path) {
+      try fileManager.removeItem(atPath: path)
+    }
   }
 
   public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {

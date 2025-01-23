@@ -10,3 +10,5 @@ Fixed stream issues
 Async fixes
 ## 0.3.0
 FileExists method added
+## 0.3.1
+Download with progress method issue fixes for ios
