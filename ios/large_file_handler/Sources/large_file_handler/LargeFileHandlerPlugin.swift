@@ -10,7 +10,7 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
     case assetNotFound
     case invalidURL
     case downloadFailed
-    
+
     var flutterError: FlutterError {
       switch self {
       case .invalidArguments:
@@ -158,11 +158,11 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
 
       try ensureDirectoryExists(for: targetPath)
       try removeExistingFile(at: targetPath)
-      
+
       try copyFileWithProgress(from: bundleAssetPath, to: targetPath) { progress in
         self.reportProgress(progress)
       }
-      
+
       completeProgress(result: result)
     } catch {
       DispatchQueue.main.async {
@@ -174,23 +174,23 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
   private func copyFileWithProgress(from sourcePath: String, to targetPath: String, progressCallback: (Int) -> Void) throws {
     let totalBytes = try FileManager.default.attributesOfItem(atPath: sourcePath)[.size] as? Int64 ?? 0
     var bytesWritten: Int64 = 0
-    
+
     let bufferSize = 1024 * 1024 // Increased buffer size to 1MB for better performance
     let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
     defer { buffer.deallocate() }
-    
+
     guard let inputStream = InputStream(fileAtPath: sourcePath),
           let outputStream = OutputStream(toFileAtPath: targetPath, append: false) else {
       throw FileError.downloadFailed
     }
-    
+
     inputStream.open()
     outputStream.open()
     defer {
       inputStream.close()
       outputStream.close()
     }
-    
+
     while inputStream.hasBytesAvailable {
       let bytesRead = inputStream.read(buffer, maxLength: bufferSize)
       if bytesRead <= 0 { break }
@@ -263,7 +263,7 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
 
     let task = URLSession.shared.downloadTask(with: downloadUrl) { [weak self] (tempURL, response, error) in
       guard let self = self else { return }
-      
+
       if let error = error {
         DispatchQueue.main.async {
           result(FlutterError(code: "DOWNLOAD_ERROR", message: error.localizedDescription, details: nil))
