@@ -1,3 +1,5 @@
+## 0.4.0
+Added iOS Swift Package Manager support
 ## 0.1.0
 Initial release
 ## 0.2.0

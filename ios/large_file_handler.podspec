@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'large_file_handler'
-  s.version          = '0.0.1'
+  s.version          = '0.4.0'
   s.summary          = 'A new Flutter plugin project.'
   s.description      = <<-DESC
 A new Flutter plugin project.
