@@ -6,7 +6,7 @@ repository: https://github.com/DenisovAV/large_file_handler
 
 environment:
   sdk: ^3.5.3
-  flutter: '>=3.3.0'
+  flutter: ">=3.3.0"
 
 dependencies:
   flutter:
@@ -40,6 +40,8 @@ flutter:
         package: com.example.large_file_handler
         pluginClass: LargeFileHandlerPlugin
       ios:
+        pluginClass: LargeFileHandlerPlugin
+      macos:
         pluginClass: LargeFileHandlerPlugin
 
   # To add assets to your plugin package, add an assets section, like this:
