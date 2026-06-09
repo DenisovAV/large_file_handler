@@ -1,3 +1,5 @@
+## 0.4.1
+Shortened package description and added dartdoc comments to the public API
 ## 0.4.0
 Added iOS Swift Package Manager support
 ## 0.1.0
