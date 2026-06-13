@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import 'large_file_handler_platform_interface.dart';
@@ -17,6 +19,10 @@ class LargeFileHandlerDesktop extends LargeFileHandlerPlatform {
   @visibleForTesting
   Future<Directory> Function() directoryProvider =
       getApplicationDocumentsDirectory;
+
+  /// Seam for tests: HTTP client used for network downloads.
+  @visibleForTesting
+  http.Client httpClient = http.Client();
 
   Future<String> _resolve(String targetName) async {
     final directory = await directoryProvider();
@@ -35,8 +41,16 @@ class LargeFileHandlerDesktop extends LargeFileHandlerPlatform {
   }
 
   @override
-  Future<void> copyUrlToLocalStorage(String url, String targetName) {
-    throw UnimplementedError('added in Task 4');
+  Future<void> copyUrlToLocalStorage(String url, String targetName) async {
+    final resolved = await _resolve(targetName);
+    final request = http.Request('GET', Uri.parse(url));
+    final response = await httpClient.send(request);
+    final sink = File(resolved).openWrite();
+    try {
+      await response.stream.pipe(sink);
+    } finally {
+      await sink.close();
+    }
   }
 
   @override
@@ -47,6 +61,43 @@ class LargeFileHandlerDesktop extends LargeFileHandlerPlatform {
 
   @override
   Stream<int> copyUrlToLocalStorageWithProgress(String url, String targetName) {
-    throw UnimplementedError('added in Task 4');
+    final controller = StreamController<int>();
+
+    Future<void> run() async {
+      final resolved = await _resolve(targetName);
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await httpClient.send(request);
+      final total = response.contentLength;
+      final sink = File(resolved).openWrite();
+
+      if (total == null || total == 0) {
+        controller.add(0);
+        await response.stream.pipe(sink);
+        await sink.close();
+        controller.add(100);
+        return;
+      }
+
+      var received = 0;
+      var lastPercent = -1;
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        final percent = ((received / total) * 100).floor().clamp(0, 100);
+        if (percent != lastPercent) {
+          lastPercent = percent;
+          controller.add(percent);
+        }
+      }
+      await sink.close();
+      if (lastPercent != 100) {
+        controller.add(100);
+      }
+    }
+
+    unawaited(run()
+        .then((_) {}, onError: controller.addError)
+        .whenComplete(controller.close));
+    return controller.stream;
   }
 }
