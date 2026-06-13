@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show ByteData, rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
@@ -24,6 +25,10 @@ class LargeFileHandlerDesktop extends LargeFileHandlerPlatform {
   @visibleForTesting
   http.Client httpClient = http.Client();
 
+  /// Seam for tests: loads asset bytes by key (e.g. `assets/foo.json`).
+  @visibleForTesting
+  Future<ByteData> Function(String key) assetLoader = rootBundle.load;
+
   Future<String> _resolve(String targetName) async {
     final directory = await directoryProvider();
     return '${directory.path}/$targetName';
@@ -36,8 +41,15 @@ class LargeFileHandlerDesktop extends LargeFileHandlerPlatform {
   }
 
   @override
-  Future<void> copyAssetToLocalStorage(String assetName, String targetName) {
-    throw UnimplementedError('added in Task 5');
+  Future<void> copyAssetToLocalStorage(
+      String assetName, String targetName) async {
+    final resolved = await _resolve(targetName);
+    final data = await assetLoader('assets/$assetName');
+    final bytes = data.buffer.asUint8List(
+      data.offsetInBytes,
+      data.lengthInBytes,
+    );
+    await File(resolved).writeAsBytes(bytes);
   }
 
   @override
@@ -56,7 +68,18 @@ class LargeFileHandlerDesktop extends LargeFileHandlerPlatform {
   @override
   Stream<int> copyAssetToLocalStorageWithProgress(
       String assetName, String targetName) {
-    throw UnimplementedError('added in Task 5');
+    final controller = StreamController<int>();
+
+    Future<void> run() async {
+      controller.add(0);
+      await copyAssetToLocalStorage(assetName, targetName);
+      controller.add(100);
+    }
+
+    unawaited(run()
+        .then((_) {}, onError: controller.addError)
+        .whenComplete(controller.close));
+    return controller.stream;
   }
 
   @override

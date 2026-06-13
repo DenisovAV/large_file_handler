@@ -79,4 +79,32 @@ void main() {
 
     expect(progress, equals(<int>[0, 100]));
   });
+
+  ByteData byteDataOf(List<int> bytes) =>
+      ByteData.view(Uint8List.fromList(bytes).buffer);
+
+  test('copyAssetToLocalStorage writes asset bytes to disk', () async {
+    final bytes = List.generate(128, (i) => i);
+    desktop.assetLoader = (key) async {
+      expect(key, equals('assets/data.json'));
+      return byteDataOf(bytes);
+    };
+
+    await desktop.copyAssetToLocalStorage('data.json', 'data.json');
+
+    final written = File('${tempDir.path}/data.json').readAsBytesSync();
+    expect(written, equals(bytes));
+  });
+
+  test('copyAssetToLocalStorageWithProgress emits 0 then 100', () async {
+    final bytes = List.generate(64, (i) => i);
+    desktop.assetLoader = (key) async => byteDataOf(bytes);
+
+    final progress = await desktop
+        .copyAssetToLocalStorageWithProgress('data.json', 'data.json')
+        .toList();
+
+    expect(progress, equals(<int>[0, 100]));
+    expect(File('${tempDir.path}/data.json').readAsBytesSync(), equals(bytes));
+  });
 }
