@@ -14,7 +14,8 @@ class MethodChannelLargeFileHandler extends LargeFileHandlerPlatform {
   final progressChannel = const EventChannel('file_download_progress');
 
   @override
-  Future<void> copyAssetToLocalStorage(String assetName, String targetName) async {
+  Future<void> copyAssetToLocalStorage(
+      String assetName, String targetName) async {
     final String targetPath = await _getLocalFilePath(targetName);
     await methodChannel.invokeMethod('copyAssetToLocal', {
       'assetName': 'assets/$assetName',
@@ -32,15 +33,19 @@ class MethodChannelLargeFileHandler extends LargeFileHandlerPlatform {
   }
 
   @override
-  Stream<int> copyAssetToLocalStorageWithProgress(String assetName, String targetName) {
+  Stream<int> copyAssetToLocalStorageWithProgress(
+      String assetName, String targetName) {
     _getLocalFilePath(targetName).then(
-      (targetPath) => methodChannel.invokeMethod('copyAssetToLocalWithProgress', {
+      (targetPath) =>
+          methodChannel.invokeMethod('copyAssetToLocalWithProgress', {
         'assetName': 'assets/$assetName',
         'targetPath': targetPath,
       }),
     );
 
-    return progressChannel.receiveBroadcastStream().map((event) => event as int);
+    return progressChannel
+        .receiveBroadcastStream()
+        .map((event) => event as int);
   }
 
   @override
@@ -52,15 +57,18 @@ class MethodChannelLargeFileHandler extends LargeFileHandlerPlatform {
       }),
     );
 
-    return progressChannel.receiveBroadcastStream().map((event) => event as int);
+    return progressChannel
+        .receiveBroadcastStream()
+        .map((event) => event as int);
   }
 
   @override
   Future<bool> fileExists(String targetName) async {
     final String targetPath = await _getLocalFilePath(targetName);
     final bool exists = await methodChannel.invokeMethod<bool>('fileExists', {
-      'targetPath': targetPath,
-    }) ?? false;
+          'targetPath': targetPath,
+        }) ??
+        false;
     return exists;
   }
 

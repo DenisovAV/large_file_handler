@@ -31,7 +31,8 @@ abstract class LargeFileHandlerPlatform extends PlatformInterface {
 
   /// Copies the asset [assetName] to [targetName], emitting copy progress
   /// as integers from 0 to 100.
-  Stream<int> copyAssetToLocalStorageWithProgress(String assetName, String targetName);
+  Stream<int> copyAssetToLocalStorageWithProgress(
+      String assetName, String targetName);
 
   /// Downloads the file at [url] to [targetName], emitting download progress
   /// as integers from 0 to 100.

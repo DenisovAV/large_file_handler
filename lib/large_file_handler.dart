@@ -12,15 +12,19 @@ class LargeFileHandler {
   ///
   /// Completes when the copy finishes. Throws a `PlatformException` if the
   /// asset cannot be found or the copy fails.
-  Future<void> copyAssetToLocalStorage({required String assetName, required String targetPath}) =>
-      LargeFileHandlerPlatform.instance.copyAssetToLocalStorage(assetName, targetPath);
+  Future<void> copyAssetToLocalStorage(
+          {required String assetName, required String targetPath}) =>
+      LargeFileHandlerPlatform.instance
+          .copyAssetToLocalStorage(assetName, targetPath);
 
   /// Downloads the file at [assetUrl] to [targetPath] on the local file system.
   ///
   /// Completes when the download finishes. Throws a `PlatformException` if the
   /// URL is invalid or the download fails.
-  Future<void> copyNetworkAssetToLocalStorage({required String assetUrl, required String targetPath}) =>
-      LargeFileHandlerPlatform.instance.copyUrlToLocalStorage(assetUrl, targetPath);
+  Future<void> copyNetworkAssetToLocalStorage(
+          {required String assetUrl, required String targetPath}) =>
+      LargeFileHandlerPlatform.instance
+          .copyUrlToLocalStorage(assetUrl, targetPath);
 
   /// Copies the asset [assetName] to [targetPath], emitting copy progress.
   ///
@@ -28,7 +32,8 @@ class LargeFileHandler {
   /// completed. The stream closes once the copy is finished.
   Stream<int> copyAssetToLocalStorageWithProgress(
           {required String assetName, required String targetPath}) =>
-      LargeFileHandlerPlatform.instance.copyAssetToLocalStorageWithProgress(assetName, targetPath);
+      LargeFileHandlerPlatform.instance
+          .copyAssetToLocalStorageWithProgress(assetName, targetPath);
 
   /// Downloads the file at [assetUrl] to [targetPath], emitting download progress.
   ///
@@ -36,7 +41,8 @@ class LargeFileHandler {
   /// completed. The stream closes once the download is finished.
   Stream<int> copyNetworkAssetToLocalStorageWithProgress(
           {required String assetUrl, required String targetPath}) =>
-      LargeFileHandlerPlatform.instance.copyUrlToLocalStorageWithProgress(assetUrl, targetPath);
+      LargeFileHandlerPlatform.instance
+          .copyUrlToLocalStorageWithProgress(assetUrl, targetPath);
 
   /// Returns whether a file already exists at [targetPath] on the local
   /// file system.
