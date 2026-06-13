@@ -80,6 +80,24 @@ void main() {
     expect(progress, equals(<int>[0, 100]));
   });
 
+  test('copyUrlToLocalStorageWithProgress forwards stream errors', () async {
+    desktop.httpClient = MockClient.streaming((request, bodyStream) async {
+      return http.StreamedResponse(
+        Stream<List<int>>.error(const SocketException('boom')),
+        200,
+        contentLength: 10,
+      );
+    });
+
+    Object? caught;
+    await desktop
+        .copyUrlToLocalStorageWithProgress('https://x/file.bin', 'file.bin')
+        .listen(null, onError: (Object e) => caught = e)
+        .asFuture<void>()
+        .catchError((Object e) => caught = e);
+    expect(caught, isA<SocketException>());
+  });
+
   ByteData byteDataOf(List<int> bytes) =>
       ByteData.view(Uint8List.fromList(bytes).buffer);
 

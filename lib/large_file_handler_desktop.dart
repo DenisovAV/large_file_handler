@@ -92,29 +92,30 @@ class LargeFileHandlerDesktop extends LargeFileHandlerPlatform {
       final response = await httpClient.send(request);
       final total = response.contentLength;
       final sink = File(resolved).openWrite();
-
-      if (total == null || total == 0) {
-        controller.add(0);
-        await response.stream.pipe(sink);
-        await sink.close();
-        controller.add(100);
-        return;
-      }
-
-      var received = 0;
-      var lastPercent = -1;
-      await for (final chunk in response.stream) {
-        sink.add(chunk);
-        received += chunk.length;
-        final percent = ((received / total) * 100).floor().clamp(0, 100);
-        if (percent != lastPercent) {
-          lastPercent = percent;
-          controller.add(percent);
+      try {
+        if (total == null || total == 0) {
+          controller.add(0);
+          await response.stream.pipe(sink);
+          controller.add(100);
+          return;
         }
-      }
-      await sink.close();
-      if (lastPercent != 100) {
-        controller.add(100);
+
+        var received = 0;
+        var lastPercent = -1;
+        await for (final chunk in response.stream) {
+          sink.add(chunk);
+          received += chunk.length;
+          final percent = ((received / total) * 100).floor().clamp(0, 100);
+          if (percent != lastPercent) {
+            lastPercent = percent;
+            controller.add(percent);
+          }
+        }
+        if (lastPercent != 100) {
+          controller.add(100);
+        }
+      } finally {
+        await sink.close();
       }
     }
 
