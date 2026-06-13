@@ -4,14 +4,14 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'large_file_handler'
-  s.version          = '0.4.1'
-  s.summary          = 'A new Flutter plugin project.'
+  s.version          = '0.5.0'
+  s.summary          = 'Copy large files from assets or download them from the network to local storage.'
   s.description      = <<-DESC
-A new Flutter plugin project.
+Efficiently copy large files from Flutter assets or download them from the network to the device's local file system, with optional progress tracking.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://github.com/DenisovAV/large_file_handler'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = { 'Sasha Denisov' => 'denisov.shureg@gmail.com' }
   s.source           = { :path => '.' }
   s.source_files = 'large_file_handler/Sources/large_file_handler/**/*.swift'
   s.dependency 'Flutter'

@@ -1,3 +1,5 @@
+## 0.5.0
+Added macOS, Windows, and Linux support; web now throws UnsupportedError instead of failing to compile
 ## 0.4.1
 Shortened package description and added dartdoc comments to the public API
 ## 0.4.0
