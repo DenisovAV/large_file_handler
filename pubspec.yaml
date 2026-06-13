@@ -44,6 +44,13 @@ flutter:
         pluginClass: LargeFileHandlerPlugin
       macos:
         pluginClass: LargeFileHandlerPlugin
+      windows:
+        dartPluginClass: LargeFileHandlerDesktop
+      linux:
+        dartPluginClass: LargeFileHandlerDesktop
+      web:
+        pluginClass: LargeFileHandlerWeb
+        fileName: large_file_handler_web.dart
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:
