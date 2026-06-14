@@ -1,3 +1,5 @@
+import 'package:flutter_web_plugins/flutter_web_plugins.dart';
+
 import 'large_file_handler_platform_interface.dart';
 
 /// Web implementation of [LargeFileHandlerPlatform].
@@ -7,13 +9,7 @@ import 'large_file_handler_platform_interface.dart';
 /// fails with an [UnsupportedError] rather than silently doing nothing.
 class LargeFileHandlerWeb extends LargeFileHandlerPlatform {
   /// Registers this class as the default platform instance on web.
-  ///
-  /// The [registrar] parameter is typed as [dynamic] to avoid importing
-  /// `flutter_web_plugins` (which depends on `dart:ui_web` and is not
-  /// available on the VM test runner). Flutter's plugin registration
-  /// mechanism locates this method by name, so the type is not required.
-  // ignore: avoid_annotating_with_dynamic
-  static void registerWith(dynamic registrar) {
+  static void registerWith(Registrar registrar) {
     LargeFileHandlerPlatform.instance = LargeFileHandlerWeb();
   }
 
