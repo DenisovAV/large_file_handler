@@ -143,8 +143,11 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
       let bufferSize = 1024
       let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
 
-      let inputStream = InputStream(fileAtPath: bundleAssetPath)!
-      let outputStream = OutputStream(toFileAtPath: targetPath, append: false)!
+      guard let inputStream = InputStream(fileAtPath: bundleAssetPath),
+            let outputStream = OutputStream(toFileAtPath: targetPath, append: false) else {
+        throw NSError(domain: "LargeFileHandler", code: -1,
+                      userInfo: [NSLocalizedDescriptionKey: "Could not open streams for asset copy"])
+      }
       inputStream.open()
       outputStream.open()
 
@@ -157,11 +160,15 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
       while inputStream.hasBytesAvailable {
         let bytesRead = inputStream.read(buffer, maxLength: bufferSize)
         if bytesRead <= 0 { break }
-        outputStream.write(buffer, maxLength: bytesRead)
-        bytesWritten += Int64(bytesRead)
-        let progress = (Double(bytesWritten) / Double(totalBytes)) * 100
+        let written = outputStream.write(buffer, maxLength: bytesRead)
+        if written < 0 {
+          throw outputStream.streamError ?? NSError(domain: "LargeFileHandler", code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Write failed"])
+        }
+        bytesWritten += Int64(written)
+        let progress = totalBytes > 0 ? Int((Double(bytesWritten) / Double(totalBytes)) * 100) : 0
         DispatchQueue.main.async {
-          self.eventSink?(Int(progress))
+          self.eventSink?(progress)
         }
       }
 
@@ -208,6 +215,14 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
         return
       }
 
+      if let httpResponse = response as? HTTPURLResponse,
+         !(200..<300).contains(httpResponse.statusCode) {
+        let statusCode = httpResponse.statusCode
+        completion(.failure(NSError(domain: "LargeFileHandler", code: statusCode,
+                                    userInfo: [NSLocalizedDescriptionKey: "HTTP \(statusCode)"])))
+        return
+      }
+
       do {
         try self.saveData(data, to: targetPath)
         completion(.success(targetPath))
@@ -235,14 +250,20 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
   private func downloadFileWithProgress(from url: String, targetPath: String, result: @escaping FlutterResult) {
     guard let downloadUrl = URL(string: url) else {
       DispatchQueue.main.async {
+        self.eventSink?(FlutterEndOfEventStream)
+        self.eventSink = nil
         result(FlutterError(code: "DOWNLOAD_ERROR", message: "Invalid URL", details: nil))
       }
       return
     }
 
-    let task = URLSession.shared.downloadTask(with: downloadUrl) { (tempURL, response, error) in
+    let task = URLSession.shared.downloadTask(with: downloadUrl) { [weak self] (tempURL, response, error) in
+      guard let self = self else { return }
+
       if let error = error {
         DispatchQueue.main.async {
+          self.eventSink?(FlutterEndOfEventStream)
+          self.eventSink = nil
           result(FlutterError(code: "DOWNLOAD_ERROR", message: error.localizedDescription, details: nil))
         }
         return
@@ -250,13 +271,29 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
 
       guard let tempURL = tempURL else {
         DispatchQueue.main.async {
+          self.eventSink?(FlutterEndOfEventStream)
+          self.eventSink = nil
           result(FlutterError(code: "DOWNLOAD_ERROR", message: "Download failed", details: nil))
+        }
+        return
+      }
+
+      if let httpResponse = response as? HTTPURLResponse,
+         !(200..<300).contains(httpResponse.statusCode) {
+        let statusCode = httpResponse.statusCode
+        DispatchQueue.main.async {
+          self.eventSink?(FlutterEndOfEventStream)
+          self.eventSink = nil
+          result(FlutterError(code: "DOWNLOAD_ERROR", message: "HTTP \(statusCode)", details: nil))
         }
         return
       }
 
       do {
         let fileURL = URL(fileURLWithPath: targetPath)
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+          try FileManager.default.removeItem(at: fileURL)
+        }
         try FileManager.default.moveItem(at: tempURL, to: fileURL)
 
         DispatchQueue.main.async {
