@@ -16,18 +16,17 @@ class LargeFileHandlerWeb extends LargeFileHandlerPlatform {
   UnsupportedError _unsupportedError(String method) =>
       UnsupportedError('LargeFileHandler.$method is not supported on web.');
 
-  Never _unsupported(String method) => throw _unsupportedError(method);
-
   @override
   Future<void> copyAssetToLocalStorage(String assetName, String targetName) =>
-      _unsupported('copyAssetToLocalStorage');
+      Future.error(_unsupportedError('copyAssetToLocalStorage'));
 
   @override
   Future<void> copyUrlToLocalStorage(String url, String targetName) =>
-      _unsupported('copyUrlToLocalStorage');
+      Future.error(_unsupportedError('copyUrlToLocalStorage'));
 
   @override
-  Future<bool> fileExists(String targetPath) => _unsupported('fileExists');
+  Future<bool> fileExists(String targetPath) =>
+      Future.error(_unsupportedError('fileExists'));
 
   @override
   Stream<int> copyAssetToLocalStorageWithProgress(
