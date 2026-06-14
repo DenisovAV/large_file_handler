@@ -4,6 +4,7 @@ import FlutterMacOS
 public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
 
   private var eventSink: FlutterEventSink?
+  private var progressObservation: NSKeyValueObservation?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "large_file_handler", binaryMessenger: registrar.messenger)
@@ -252,6 +253,7 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
       DispatchQueue.main.async {
         self.eventSink?(FlutterEndOfEventStream)
         self.eventSink = nil
+        self.progressObservation = nil
         result(FlutterError(code: "DOWNLOAD_ERROR", message: "Invalid URL", details: nil))
       }
       return
@@ -264,6 +266,7 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
         DispatchQueue.main.async {
           self.eventSink?(FlutterEndOfEventStream)
           self.eventSink = nil
+          self.progressObservation = nil
           result(FlutterError(code: "DOWNLOAD_ERROR", message: error.localizedDescription, details: nil))
         }
         return
@@ -273,6 +276,7 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
         DispatchQueue.main.async {
           self.eventSink?(FlutterEndOfEventStream)
           self.eventSink = nil
+          self.progressObservation = nil
           result(FlutterError(code: "DOWNLOAD_ERROR", message: "Download failed", details: nil))
         }
         return
@@ -284,6 +288,7 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
         DispatchQueue.main.async {
           self.eventSink?(FlutterEndOfEventStream)
           self.eventSink = nil
+          self.progressObservation = nil
           result(FlutterError(code: "DOWNLOAD_ERROR", message: "HTTP \(statusCode)", details: nil))
         }
         return
@@ -300,12 +305,14 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
           self.eventSink?(100)
           self.eventSink?(FlutterEndOfEventStream)
           self.eventSink = nil
+          self.progressObservation = nil
           result(nil)
         }
       } catch {
         DispatchQueue.main.async {
           self.eventSink?(FlutterEndOfEventStream)
           self.eventSink = nil
+          self.progressObservation = nil
           result(FlutterError(code: "DOWNLOAD_ERROR", message: "Error during file download", details: error.localizedDescription))
         }
       }
@@ -313,7 +320,11 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
 
     task.resume()
 
-    task.progress.addObserver(self, forKeyPath: #keyPath(Progress.fractionCompleted), options: [.new], context: nil)
+    progressObservation = task.progress.observe(\.fractionCompleted, options: [.new]) { [weak self] progress, _ in
+      DispatchQueue.main.async {
+        self?.eventSink?(Int(progress.fractionCompleted * 100))
+      }
+    }
   }
 
   public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
@@ -323,15 +334,8 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
 
   public func onCancel(withArguments arguments: Any?) -> FlutterError? {
     eventSink = nil
+    progressObservation = nil
     return nil
   }
 
-  override public func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-    if keyPath == #keyPath(Progress.fractionCompleted), let progress = object as? Progress {
-      DispatchQueue.main.async {
-        let percentage = Int(progress.fractionCompleted * 100)
-        self.eventSink?(percentage)
-      }
-    }
-  }
 }
