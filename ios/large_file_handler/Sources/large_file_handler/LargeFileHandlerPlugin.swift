@@ -4,6 +4,7 @@ import UIKit
 public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
 
   private var eventSink: FlutterEventSink?
+  private var progressObservation: NSKeyValueObservation?
 
   private enum FileError: Error {
     case invalidArguments
@@ -291,7 +292,11 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
     }
 
     task.resume()
-    task.progress.addObserver(self, forKeyPath: #keyPath(Progress.fractionCompleted), options: [.new], context: nil)
+    progressObservation = task.progress.observe(\.fractionCompleted, options: [.new]) { [weak self] progress, _ in
+      DispatchQueue.main.async {
+        self?.eventSink?(Int(progress.fractionCompleted * 100))
+      }
+    }
   }
 
   private func reportProgress(_ progress: Int) {
@@ -302,6 +307,7 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
 
   private func completeProgress(result: @escaping FlutterResult) {
     DispatchQueue.main.async { [weak self] in
+      self?.progressObservation = nil
       self?.eventSink?(100)
       self?.eventSink?(FlutterEndOfEventStream)
       self?.eventSink = nil
@@ -310,6 +316,7 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
   }
 
   private func failProgress(result: @escaping FlutterResult, error: FlutterError) {
+    progressObservation = nil
     eventSink?(FlutterEndOfEventStream)
     eventSink = nil
     result(error)
@@ -333,16 +340,9 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
   }
 
   public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    progressObservation = nil
     eventSink = nil
     return nil
   }
 
-  override public func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-    if keyPath == #keyPath(Progress.fractionCompleted), let progress = object as? Progress {
-      DispatchQueue.main.async {
-        let percentage = Int(progress.fractionCompleted * 100)
-        self.eventSink?(percentage)
-      }
-    }
-  }
 }
