@@ -173,6 +173,8 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
       }
     } catch {
       DispatchQueue.main.async {
+        self.eventSink?(FlutterEndOfEventStream)
+        self.eventSink = nil
         result(FlutterError(code: "ERROR", message: "Failed to copy asset with progress", details: error.localizedDescription))
       }
     }
@@ -259,10 +261,14 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
 
         DispatchQueue.main.async {
           self.eventSink?(100)
+          self.eventSink?(FlutterEndOfEventStream)
+          self.eventSink = nil
           result(nil)
         }
       } catch {
         DispatchQueue.main.async {
+          self.eventSink?(FlutterEndOfEventStream)
+          self.eventSink = nil
           result(FlutterError(code: "DOWNLOAD_ERROR", message: "Error during file download", details: error.localizedDescription))
         }
       }
