@@ -21,6 +21,7 @@ import java.io.IOException
 import java.io.InputStream
 
 class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler {
+  private data class DownloadStream(val inputStream: InputStream, val contentLength: Long)
   private lateinit var channel: MethodChannel
   private lateinit var assetManager: AssetManager
   private lateinit var flutterLoader: FlutterLoader
@@ -72,8 +73,8 @@ class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.St
         val targetPath = call.argument<String>("targetPath")!!
         CoroutineScope(Dispatchers.IO).launch {
           try {
-            val inputStream = downloadFileFromUrl(url)
-            copyStreamToFile(inputStream, targetPath)
+            val download = downloadFileFromUrl(url)
+            copyStreamToFile(download.inputStream, targetPath)
             handler.post { result.success(null) }
           } catch (e: Exception) {
             handler.post { result.error("DOWNLOAD_FAILED", "Error during file download: ${e.message}", null) }
@@ -85,9 +86,8 @@ class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.St
         val targetPath = call.argument<String>("targetPath")!!
         CoroutineScope(Dispatchers.IO).launch {
           try {
-            val inputStream = downloadFileFromUrl(url)
-            val totalBytes = getContentLength(url)
-            copyStreamToFileWithProgress(inputStream, targetPath, totalBytes)
+            val download = downloadFileFromUrl(url)
+            copyStreamToFileWithProgress(download.inputStream, targetPath, download.contentLength)
             handler.post { result.success(null) }
           } catch (e: Exception) {
             handler.post { result.error("DOWNLOAD_FAILED", "Error during file download: ${e.message}", null) }
@@ -107,7 +107,7 @@ class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.St
     }
   }
 
-  private fun downloadFileFromUrl(url: String): InputStream {
+  private fun downloadFileFromUrl(url: String): DownloadStream {
     val client = OkHttpClient()
     val request = Request.Builder().url(url).build()
     val response = client.newCall(request).execute()
@@ -116,19 +116,9 @@ class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.St
       throw IOException("Failed to download file: ${response.code}")
     }
 
-    return response.body?.byteStream() ?: throw IOException("Response body is null")
-  }
-
-  private fun getContentLength(url: String): Long {
-    val client = OkHttpClient()
-    val request = Request.Builder().url(url).head().build()
-    val response = client.newCall(request).execute()
-
-    if (!response.isSuccessful) {
-      throw IOException("Failed to fetch content length: ${response.code}")
-    }
-
-    return response.header("Content-Length")?.toLong() ?: 0L
+    val body = response.body ?: throw IOException("Response body is null")
+    val contentLength = body.contentLength().coerceAtLeast(0)
+    return DownloadStream(body.byteStream(), contentLength)
   }
 
   private fun copyStreamToFile(inputStream: InputStream, targetPath: String) {
