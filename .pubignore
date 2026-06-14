@@ -4,3 +4,4 @@ docs/
 .remember/
 CLAUDE.md
 test_reports/
+build/
