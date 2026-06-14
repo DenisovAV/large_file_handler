@@ -3,3 +3,4 @@ docs/
 # Local AI-assistant working files.
 .remember/
 CLAUDE.md
+test_reports/
