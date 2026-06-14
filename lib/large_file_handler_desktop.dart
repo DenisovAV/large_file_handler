@@ -57,6 +57,13 @@ class LargeFileHandlerDesktop extends LargeFileHandlerPlatform {
     final resolved = await _resolve(targetName);
     final request = http.Request('GET', Uri.parse(url));
     final response = await httpClient.send(request);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      await response.stream.drain<void>();
+      throw HttpException(
+        'HTTP ${response.statusCode} downloading $url',
+        uri: Uri.parse(url),
+      );
+    }
     final sink = File(resolved).openWrite();
     try {
       await response.stream.pipe(sink);
@@ -90,6 +97,13 @@ class LargeFileHandlerDesktop extends LargeFileHandlerPlatform {
       final resolved = await _resolve(targetName);
       final request = http.Request('GET', Uri.parse(url));
       final response = await httpClient.send(request);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        await response.stream.drain<void>();
+        throw HttpException(
+          'HTTP ${response.statusCode} downloading $url',
+          uri: Uri.parse(url),
+        );
+      }
       final total = response.contentLength;
       final sink = File(resolved).openWrite();
       try {

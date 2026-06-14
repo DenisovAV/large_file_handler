@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -96,6 +97,40 @@ void main() {
         .asFuture<void>()
         .catchError((Object e) => caught = e);
     expect(caught, isA<SocketException>());
+  });
+
+  test('copyUrlToLocalStorage throws on HTTP error status', () async {
+    desktop.httpClient = MockClient.streaming((request, bodyStream) async {
+      return http.StreamedResponse(
+        Stream.value(utf8.encode('Not Found')),
+        404,
+      );
+    });
+
+    await expectLater(
+      desktop.copyUrlToLocalStorage('https://x/missing.bin', 'missing.bin'),
+      throwsA(isA<HttpException>()),
+    );
+    expect(File('${tempDir.path}/missing.bin').existsSync(), isFalse);
+  });
+
+  test('copyUrlToLocalStorageWithProgress forwards HTTP error status',
+      () async {
+    desktop.httpClient = MockClient.streaming((request, bodyStream) async {
+      return http.StreamedResponse(
+        Stream.value(utf8.encode('Server Error')),
+        500,
+        contentLength: 12,
+      );
+    });
+
+    await expectLater(
+      desktop
+          .copyUrlToLocalStorageWithProgress('https://x/err.bin', 'err.bin')
+          .toList(),
+      throwsA(isA<HttpException>()),
+    );
+    expect(File('${tempDir.path}/err.bin').existsSync(), isFalse);
   });
 
   ByteData byteDataOf(List<int> bytes) =>
