@@ -1,0 +1,6 @@
+# Internal development docs (specs, plans) — not part of the published package.
+docs/
+# Local AI-assistant working files.
+.remember/
+CLAUDE.md
+test_reports/

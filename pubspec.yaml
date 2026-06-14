@@ -1,6 +1,6 @@
 name: large_file_handler
-description: "The Large File Handler Plugin designed to efficiently work with large files, for example allows you to download large files from network or copy files from the Flutter app's assets to the device's local file system. This is useful when you need to access large files at native part in your plugins"
-version: 0.4.0
+description: "Efficiently copy large files from Flutter assets or download them from the network to the device's local file system, with optional progress tracking."
+version: 0.5.0
 homepage: https://github.com/DenisovAV/large_file_handler
 repository: https://github.com/DenisovAV/large_file_handler
 
@@ -11,8 +11,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
   path_provider: ^2.1.4
   plugin_platform_interface: ^2.0.2
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
@@ -41,6 +44,15 @@ flutter:
         pluginClass: LargeFileHandlerPlugin
       ios:
         pluginClass: LargeFileHandlerPlugin
+      macos:
+        pluginClass: LargeFileHandlerPlugin
+      windows:
+        dartPluginClass: LargeFileHandlerDesktop
+      linux:
+        dartPluginClass: LargeFileHandlerDesktop
+      web:
+        pluginClass: LargeFileHandlerWeb
+        fileName: large_file_handler_web.dart
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:

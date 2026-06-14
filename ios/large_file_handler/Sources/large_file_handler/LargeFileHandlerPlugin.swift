@@ -4,6 +4,7 @@ import UIKit
 public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
 
   private var eventSink: FlutterEventSink?
+  private var progressObservation: NSKeyValueObservation?
 
   private enum FileError: Error {
     case invalidArguments
@@ -166,7 +167,7 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
       completeProgress(result: result)
     } catch {
       DispatchQueue.main.async {
-        result(FlutterError(code: "ERROR", message: "Failed to copy asset", details: error.localizedDescription))
+        self.failProgress(result: result, error: FlutterError(code: "ERROR", message: "Failed to copy asset", details: error.localizedDescription))
       }
     }
   }
@@ -256,7 +257,7 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
   private func downloadFileWithProgress(from url: String, targetPath: String, result: @escaping FlutterResult) {
     guard let downloadUrl = URL(string: url) else {
       DispatchQueue.main.async {
-        result(FileError.invalidURL.flutterError)
+        self.failProgress(result: result, error: FileError.invalidURL.flutterError)
       }
       return
     }
@@ -266,14 +267,14 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
 
       if let error = error {
         DispatchQueue.main.async {
-          result(FlutterError(code: "DOWNLOAD_ERROR", message: error.localizedDescription, details: nil))
+          self.failProgress(result: result, error: FlutterError(code: "DOWNLOAD_ERROR", message: error.localizedDescription, details: nil))
         }
         return
       }
 
       guard let tempURL = tempURL else {
         DispatchQueue.main.async {
-          result(FileError.downloadFailed.flutterError)
+          self.failProgress(result: result, error: FileError.downloadFailed.flutterError)
         }
         return
       }
@@ -285,13 +286,17 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
         self.completeProgress(result: result)
       } catch {
         DispatchQueue.main.async {
-          result(FlutterError(code: "DOWNLOAD_ERROR", message: "Error during file download", details: error.localizedDescription))
+          self.failProgress(result: result, error: FlutterError(code: "DOWNLOAD_ERROR", message: "Error during file download", details: error.localizedDescription))
         }
       }
     }
 
     task.resume()
-    task.progress.addObserver(self, forKeyPath: #keyPath(Progress.fractionCompleted), options: [.new], context: nil)
+    progressObservation = task.progress.observe(\.fractionCompleted, options: [.new]) { [weak self] progress, _ in
+      DispatchQueue.main.async {
+        self?.eventSink?(Int(progress.fractionCompleted * 100))
+      }
+    }
   }
 
   private func reportProgress(_ progress: Int) {
@@ -302,11 +307,19 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
 
   private func completeProgress(result: @escaping FlutterResult) {
     DispatchQueue.main.async { [weak self] in
+      self?.progressObservation = nil
       self?.eventSink?(100)
       self?.eventSink?(FlutterEndOfEventStream)
       self?.eventSink = nil
       result(nil)
     }
+  }
+
+  private func failProgress(result: @escaping FlutterResult, error: FlutterError) {
+    progressObservation = nil
+    eventSink?(FlutterEndOfEventStream)
+    eventSink = nil
+    result(error)
   }
 
   private func ensureDirectoryExists(for path: String) throws {
@@ -327,16 +340,9 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
   }
 
   public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    progressObservation = nil
     eventSink = nil
     return nil
   }
 
-  override public func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-    if keyPath == #keyPath(Progress.fractionCompleted), let progress = object as? Progress {
-      DispatchQueue.main.async {
-        let percentage = Int(progress.fractionCompleted * 100)
-        self.eventSink?(percentage)
-      }
-    }
-  }
 }

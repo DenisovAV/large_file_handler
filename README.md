@@ -6,7 +6,7 @@ The **Large File Handler Plugin** designed to efficiently work with large files,
 
 - Copy any asset from your Flutter project to the local file system.
 - Download files from a network to the local file system.
-- Cross-platform support for both Android and iOS.
+- Cross-platform support: Android, iOS, macOS, Windows, and Linux.
 - Copy files with or without progress tracking.
 
 ## Installation
@@ -15,7 +15,7 @@ To install the plugin, add the following line to your `pubspec.yaml` under the d
 
 ```yaml
 dependencies:
-  large_file_handler: ^0.3.1
+  large_file_handler: ^0.5.0
 ```
 
 Then, run:
@@ -135,8 +135,31 @@ Future<void> copyCloudToLocal() async {
 
 ## Supported Platforms
 
-- Android
-- iOS
+| Platform | Support |
+|----------|---------|
+| Android  | ✅ Full (native) |
+| iOS      | ✅ Full (native) |
+| macOS    | ✅ Full (native) |
+| Windows  | ✅ Full (pure Dart) |
+| Linux    | ✅ Full (pure Dart) |
+| Web      | ⛔ Not supported — see below |
+
+### Web
+
+A browser has no application documents directory, so this plugin cannot copy or
+download files to a local file path on web. Every method throws an
+`UnsupportedError`. Guard your calls with `kIsWeb`, or catch the error:
+
+```dart
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+if (!kIsWeb) {
+  await LargeFileHandler().copyAssetToLocalStorage(
+    assetName: 'example.json',
+    targetPath: 'example.json',
+  );
+}
+```
 
 ## License
 

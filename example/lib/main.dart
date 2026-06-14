@@ -31,7 +31,10 @@ class _MyAppState extends State<MyApp> {
     const targetPath = 'example.json';
 
     // Check if the file already exists
-    bool fileExists = await LargeFileHandler().fileExists(targetPath: targetPath);
+    bool fileExists =
+        await LargeFileHandler().fileExists(targetPath: targetPath);
+
+    if (!mounted) return;
 
     if (fileExists) {
       // If file exists, show dialog asking if it should be overwritten
@@ -44,7 +47,8 @@ class _MyAppState extends State<MyApp> {
                 'The file already exists at the target path. Do you want to overwrite it?'),
             actions: <Widget>[
               TextButton(
-                onPressed: () => Navigator.of(context).pop(false), // Do not overwrite
+                onPressed: () =>
+                    Navigator.of(context).pop(false), // Do not overwrite
                 child: const Text('No'),
               ),
               TextButton(
@@ -71,7 +75,8 @@ class _MyAppState extends State<MyApp> {
   Future<void> copyAssetToLocalWithProgress(
       {required String assetName, required String targetPath}) async {
     try {
-      Stream<int> progressStream = LargeFileHandler().copyAssetToLocalStorageWithProgress(
+      Stream<int> progressStream =
+          LargeFileHandler().copyAssetToLocalStorageWithProgress(
         assetName: assetName,
         targetPath: targetPath,
       );
