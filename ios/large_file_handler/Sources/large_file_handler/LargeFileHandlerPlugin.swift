@@ -167,7 +167,7 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
       completeProgress(result: result)
     } catch {
       DispatchQueue.main.async {
-        result(FlutterError(code: "ERROR", message: "Failed to copy asset", details: error.localizedDescription))
+        self.failProgress(result: result, error: FlutterError(code: "ERROR", message: "Failed to copy asset", details: error.localizedDescription))
       }
     }
   }
