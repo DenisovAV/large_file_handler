@@ -215,23 +215,35 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
 
   private func downloadFile(from url: String, targetPath: String, completion: @escaping (Result<String, Error>) -> Void) {
     guard let downloadUrl = URL(string: url) else {
-      completion(.failure(NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])))
+      completion(.failure(FileError.invalidURL))
       return
     }
 
-    let task = URLSession.shared.dataTask(with: downloadUrl) { data, response, error in
+    let task = URLSession.shared.downloadTask(with: downloadUrl) { [weak self] tempURL, response, error in
+      guard let self = self else { return }
+
       if let error = error {
         completion(.failure(error))
         return
       }
 
-      guard let data = data else {
-        completion(.failure(NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey: "No data received"])))
+      if let httpResponse = response as? HTTPURLResponse,
+         !(200..<300).contains(httpResponse.statusCode) {
+        completion(.failure(NSError(domain: "LargeFileHandler", code: httpResponse.statusCode,
+          userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"])))
+        return
+      }
+
+      guard let tempURL = tempURL else {
+        completion(.failure(NSError(domain: "LargeFileHandler", code: 500,
+          userInfo: [NSLocalizedDescriptionKey: "No file received"])))
         return
       }
 
       do {
-        try self.saveData(data, to: targetPath)
+        try self.ensureDirectoryExists(for: targetPath)
+        try self.removeExistingFile(at: targetPath)
+        try FileManager.default.moveItem(at: tempURL, to: URL(fileURLWithPath: targetPath))
         completion(.success(targetPath))
       } catch {
         completion(.failure(error))
@@ -239,19 +251,6 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
     }
 
     task.resume()
-  }
-
-  private func saveData(_ data: Data, to path: String) throws {
-    let fileManager = FileManager.default
-    if fileManager.fileExists(atPath: path) {
-      try fileManager.removeItem(atPath: path)
-    }
-
-    fileManager.createFile(atPath: path, contents: nil, attributes: nil)
-
-    let fileHandle = try FileHandle(forWritingTo: URL(fileURLWithPath: path))
-    fileHandle.write(data)
-    fileHandle.closeFile()
   }
 
   private func downloadFileWithProgress(from url: String, targetPath: String, result: @escaping FlutterResult) {
