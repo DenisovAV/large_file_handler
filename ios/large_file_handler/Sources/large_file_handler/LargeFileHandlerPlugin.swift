@@ -256,7 +256,7 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
   private func downloadFileWithProgress(from url: String, targetPath: String, result: @escaping FlutterResult) {
     guard let downloadUrl = URL(string: url) else {
       DispatchQueue.main.async {
-        result(FileError.invalidURL.flutterError)
+        self.failProgress(result: result, error: FileError.invalidURL.flutterError)
       }
       return
     }
@@ -266,14 +266,14 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
 
       if let error = error {
         DispatchQueue.main.async {
-          result(FlutterError(code: "DOWNLOAD_ERROR", message: error.localizedDescription, details: nil))
+          self.failProgress(result: result, error: FlutterError(code: "DOWNLOAD_ERROR", message: error.localizedDescription, details: nil))
         }
         return
       }
 
       guard let tempURL = tempURL else {
         DispatchQueue.main.async {
-          result(FileError.downloadFailed.flutterError)
+          self.failProgress(result: result, error: FileError.downloadFailed.flutterError)
         }
         return
       }
@@ -285,7 +285,7 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
         self.completeProgress(result: result)
       } catch {
         DispatchQueue.main.async {
-          result(FlutterError(code: "DOWNLOAD_ERROR", message: "Error during file download", details: error.localizedDescription))
+          self.failProgress(result: result, error: FlutterError(code: "DOWNLOAD_ERROR", message: "Error during file download", details: error.localizedDescription))
         }
       }
     }
@@ -307,6 +307,12 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
       self?.eventSink = nil
       result(nil)
     }
+  }
+
+  private func failProgress(result: @escaping FlutterResult, error: FlutterError) {
+    eventSink?(FlutterEndOfEventStream)
+    eventSink = nil
+    result(error)
   }
 
   private func ensureDirectoryExists(for path: String) throws {
