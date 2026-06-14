@@ -13,9 +13,10 @@ Efficiently copy large files from Flutter assets or download them from the netwo
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Sasha Denisov' => 'denisov.shureg@gmail.com' }
   s.source           = { :path => '.' }
-  s.source_files = 'Classes/**/*'
+  s.source_files = 'large_file_handler/Sources/large_file_handler/**/*.swift'
   s.dependency 'FlutterMacOS'
   s.platform = :osx, '10.11'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   s.swift_version = '5.0'
+  s.resource_bundles = {'large_file_handler_privacy' => ['large_file_handler/Sources/large_file_handler/Resources/PrivacyInfo.xcprivacy']}
 end

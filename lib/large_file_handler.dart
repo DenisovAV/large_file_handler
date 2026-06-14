@@ -1,6 +1,14 @@
 import 'dart:async';
 import 'large_file_handler_platform_interface.dart';
 
+// The Windows/Linux implementation is registered via `dartPluginClass`, which
+// requires `LargeFileHandlerDesktop` to be reachable through this main library.
+// The real implementation imports `dart:io`; on web a stub is exported instead
+// so importing this library on web (and WASM) never pulls in `dart:io`.
+export 'src/desktop_export_stub.dart'
+    if (dart.library.io) 'large_file_handler_desktop.dart'
+    show LargeFileHandlerDesktop;
+
 /// Copies large files from Flutter assets or the network to the device's
 /// local file system, with optional progress tracking.
 ///
