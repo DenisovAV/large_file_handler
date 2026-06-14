@@ -1,5 +1,5 @@
 ## 0.5.0
-Added macOS, Windows, and Linux support; web now throws UnsupportedError instead of failing to compile
+Added macOS, Windows, and Linux support; web now throws UnsupportedError instead of failing to compile. macOS now supports the Swift Package Manager, and the package is WASM-compatible.
 ## 0.4.1
 Shortened package description and added dartdoc comments to the public API
 ## 0.4.0
