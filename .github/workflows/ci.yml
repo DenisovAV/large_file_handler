@@ -145,7 +145,8 @@ jobs:
           # 8.x cannot load there. Fetch the distribution this project pins and
           # run that. The version is READ from the wrapper properties rather
           # than repeated here, so the two cannot drift apart.
-          GRADLE_VERSION=$(sed -nE 's|.*/gradle-([0-9.]+)-(all|bin)\.zip|\1|p' \
+          # `#` as the delimiter, not `|`: the alternation below contains one.
+          GRADLE_VERSION=$(sed -nE 's#.*/gradle-([0-9.]+)-(all|bin)\.zip#\1#p' \
             gradle/wrapper/gradle-wrapper.properties)
           test -n "$GRADLE_VERSION" || {
             echo "could not read the pinned Gradle version"; exit 1; }
