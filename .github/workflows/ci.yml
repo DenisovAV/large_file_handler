@@ -89,19 +89,10 @@ jobs:
         # never arrives.
         run: |
           xcrun simctl list devices available
-          UDID=$(xcrun simctl list devices available --json | python3 -c '
-import json, sys
-devices = json.load(sys.stdin)["devices"]
-pick = ""
-for runtime, entries in devices.items():
-    if "iOS" not in runtime:
-        continue
-    for entry in entries:
-        if entry.get("isAvailable") and entry["name"].startswith("iPhone"):
-            pick = entry["udid"]
-print(pick)
-')
+          UDID=$(xcrun simctl list devices available \
+            | awk '/^-- iOS/{ios=1;next} /^-- /{ios=0} ios && /iPhone/ && match($0, /[0-9A-F-]{36}/) {print substr($0, RSTART, RLENGTH); exit}')
           test -n "$UDID" || { echo "no available iPhone simulator"; exit 1; }
+          echo "picked $UDID"
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$UDID"
           xcrun simctl bootstatus "$UDID" -b
