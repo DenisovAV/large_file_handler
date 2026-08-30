@@ -1,0 +1,208 @@
+# CI for large_file_handler.
+#
+# This package declares six platforms and, until this file, ran its tests on
+# none of them. Issue #10 — `copyAssetToLocalStorage` failing on EVERY macOS run
+# — reached a user because nothing here executed. Three further defects (the
+# desktop error type, a progress failure that never reached the caller's stream,
+# and native unit tests that could not even construct the plugin) were found by
+# running the suite per platform, not by reading the code.
+#
+# So the matrix is the point: a job per declared platform. A platform that is
+# not exercised here is one this package only claims to support.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze + dart tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze
+      - name: Dart tests
+        # The desktop implementation and the method-channel contract are pure
+        # Dart, so their failure paths are covered here rather than on a device.
+        run: flutter test
+      - name: Analyze the example
+        working-directory: example
+        run: |
+          flutter pub get
+          flutter analyze
+
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: End-to-end
+        working-directory: example
+        run: |
+          flutter pub get
+          flutter test integration_test/copy_asset_test.dart -d macos
+      - name: Native unit tests
+        working-directory: example
+        # `flutter test` rewrites FLUTTER_TARGET in Flutter-Generated.xcconfig to
+        # a temp listener that no longer exists, so the Flutter Assemble phase
+        # fails under xcodebuild. A plain build puts lib/main.dart back first.
+        run: |
+          flutter build macos --debug
+          cd macos
+          xcodebuild test \
+            -workspace Runner.xcworkspace -scheme Runner \
+            -destination 'platform=macOS' -configuration Debug \
+            -parallel-testing-enabled NO
+
+  ios:
+    name: iOS
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Boot a simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available \
+            | grep -E '^[[:space:]]+iPhone' | head -1 \
+            | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          test -n "$UDID" || { echo "no iPhone simulator available"; exit 1; }
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+      - name: End-to-end
+        working-directory: example
+        run: |
+          flutter pub get
+          flutter test integration_test/copy_asset_test.dart -d ${{ steps.sim.outputs.udid }}
+      - name: Native unit tests
+        working-directory: example
+        # Parallel testing clones the simulator, which fails on the runner with
+        # "device was allocated but stuck in creation state".
+        run: |
+          flutter build ios --simulator --debug
+          cd ios
+          xcodebuild test \
+            -workspace Runner.xcworkspace -scheme Runner \
+            -destination 'platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}' \
+            -configuration Debug -parallel-testing-enabled NO
+
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Kotlin unit tests
+        working-directory: example/android
+        # These need `unitTests.returnDefaultValues`: the plugin holds a
+        # `Handler(Looper.getMainLooper())` field, so without it CONSTRUCTING it
+        # throws "not mocked" and no Android unit test can run at all.
+        run: |
+          cd ../ && flutter pub get && cd android
+          ./gradlew testDebugUnitTest
+      - name: End-to-end on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          working-directory: example
+          script: flutter test integration_test/copy_asset_test.dart -d emulator-5554
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: End-to-end
+        working-directory: example
+        run: |
+          flutter pub get
+          flutter test integration_test/copy_asset_test.dart -d windows
+
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev xvfb
+      - name: End-to-end
+        working-directory: example
+        # The runner is headless; the Linux shell still needs a display server.
+        run: |
+          flutter pub get
+          xvfb-run -a flutter test integration_test/copy_asset_test.dart -d linux
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+          install-chromedriver: true
+      - name: End-to-end
+        working-directory: example
+        # `flutter drive` is the only runner the Flutter SDK supports for
+        # integration_test on web. It prints no test COUNTS, so a suite that
+        # fails to start still reports "All tests passed" — the web tests
+        # deliberately have no setUp for that reason.
+        run: |
+          flutter pub get
+          chromedriver --port=4444 &
+          sleep 3
+          flutter drive \
+            --driver=test_driver/integration_test.dart \
+            --target=integration_test/copy_asset_web_test.dart \
+            -d web-server --browser-name=chrome --headless
