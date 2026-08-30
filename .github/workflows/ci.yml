@@ -75,7 +75,7 @@ jobs:
   ios:
     name: iOS
     runs-on: macos-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -83,30 +83,57 @@ jobs:
           channel: stable
       - name: Boot a simulator
         id: sim
+        # Picked from the AVAILABLE list rather than by name: the runner image
+        # decides which runtimes exist, and a device of an uninstalled runtime
+        # boots into nothing while `flutter test` waits for a VM service that
+        # never arrives.
         run: |
-          UDID=$(xcrun simctl list devices available \
-            | grep -E '^[[:space:]]+iPhone' | head -1 \
-            | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
-          test -n "$UDID" || { echo "no iPhone simulator available"; exit 1; }
+          xcrun simctl list devices available
+          UDID=$(xcrun simctl list devices available --json | python3 -c '
+import json, sys
+devices = json.load(sys.stdin)["devices"]
+pick = ""
+for runtime, entries in devices.items():
+    if "iOS" not in runtime:
+        continue
+    for entry in entries:
+        if entry.get("isAvailable") and entry["name"].startswith("iPhone"):
+            pick = entry["udid"]
+print(pick)
+')
+          test -n "$UDID" || { echo "no available iPhone simulator"; exit 1; }
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$UDID"
           xcrun simctl bootstatus "$UDID" -b
-      - name: End-to-end
+      - name: Build once
         working-directory: example
+        # Kept out of the test step so a cold build and a hung test cannot look
+        # like the same 40-minute silence.
         run: |
           flutter pub get
-          flutter test integration_test/copy_asset_test.dart -d ${{ steps.sim.outputs.udid }}
+          flutter build ios --simulator --debug
       - name: Native unit tests
-        working-directory: example
+        working-directory: example/ios
+        # Before the end-to-end step: these are fast and deterministic, and a
+        # flaky simulator run must not hide their result.
+        #
         # Parallel testing clones the simulator, which fails on the runner with
         # "device was allocated but stuck in creation state".
         run: |
-          flutter build ios --simulator --debug
-          cd ios
           xcodebuild test \
             -workspace Runner.xcworkspace -scheme Runner \
             -destination 'platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}' \
             -configuration Debug -parallel-testing-enabled NO
+      - name: Simulator visible to Flutter?
+        # Fails in seconds with the device list printed, instead of letting the
+        # next step wait out the job timeout.
+        run: |
+          flutter devices
+          flutter devices | grep -q '${{ steps.sim.outputs.udid }}' || {
+            echo "the booted simulator is not visible to Flutter"; exit 1; }
+      - name: End-to-end
+        working-directory: example
+        run: flutter test integration_test/copy_asset_test.dart -d ${{ steps.sim.outputs.udid }}
 
   android:
     name: Android
