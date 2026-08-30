@@ -1,16 +1,22 @@
 PODS:
   - FlutterMacOS (1.0.0)
+  - large_file_handler (0.5.0):
+    - FlutterMacOS
 
 DEPENDENCIES:
   - FlutterMacOS (from `Flutter/ephemeral`)
+  - large_file_handler (from `Flutter/ephemeral/.symlinks/plugins/large_file_handler/macos`)
 
 EXTERNAL SOURCES:
   FlutterMacOS:
     :path: Flutter/ephemeral
+  large_file_handler:
+    :path: Flutter/ephemeral/.symlinks/plugins/large_file_handler/macos
 
 SPEC CHECKSUMS:
-  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
+  large_file_handler: b337fef756ae925be9c28112a81c7c4275d91c45
 
-PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
+PODFILE CHECKSUM: 1e95c36afbfd1cb6423ceca4de7a8e1b256fb6ac
 
 COCOAPODS: 1.16.2

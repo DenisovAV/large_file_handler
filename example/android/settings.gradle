@@ -19,6 +19,13 @@ pluginManagement {
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
     id "com.android.application" version "8.11.1" apply false
+    // Flutter's Gradle plugin applies `kotlin-android` to every subproject that
+    // does not (which is all of them here, deliberately), but the version comes
+    // from AGP's bundled default — 2.0.0, below the 2.2.20 floor Flutter 3.47
+    // enforces. `flutter build` passes the validation-skip flag, so this only
+    // surfaced on a direct `./gradlew testDebugUnitTest`: the native unit tests
+    // could not be run at all.
+    id "org.jetbrains.kotlin.android" version "2.2.20" apply false
 }
 
 include ":app"

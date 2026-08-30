@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show FlutterError;
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -147,6 +149,40 @@ void main() {
 
     final written = File('${tempDir.path}/data.json').readAsBytesSync();
     expect(written, equals(bytes));
+  });
+
+  test('a missing asset surfaces as PlatformException, not FlutterError',
+      () async {
+    // `rootBundle.load` throws a FlutterError, and this implementation used to
+    // let it through. Every native platform reports through a method channel,
+    // so the handler this package documents is `on PlatformException` — which
+    // meant that on Windows and Linux the README's own example never caught the
+    // failure and it escaped unhandled.
+    desktop.assetLoader = (key) async => throw FlutterError(
+          'Unable to load asset: "$key". The asset does not exist.',
+        );
+
+    await expectLater(
+      desktop.copyAssetToLocalStorage('absent.json', 'absent.json'),
+      throwsA(
+        isA<PlatformException>().having(
+          (e) => e.message,
+          'message',
+          contains('absent.json'),
+        ),
+      ),
+    );
+  });
+
+  test('the progress variant reports the same failure', () async {
+    // Same contract on the other entry point: the two paths shared a bug once
+    // and can share a regression again.
+    desktop.assetLoader = (key) async => throw FlutterError('nope');
+
+    await expectLater(
+      desktop.copyAssetToLocalStorageWithProgress('absent.json', 'absent.json'),
+      emitsThrough(emitsError(isA<PlatformException>())),
+    );
   });
 
   test('copyAssetToLocalStorageWithProgress emits 0 then 100', () async {
