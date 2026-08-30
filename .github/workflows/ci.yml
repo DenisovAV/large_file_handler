@@ -140,13 +140,20 @@ jobs:
           flutter build apk --config-only
           cd android
           # Flutter's example template gitignores the Gradle wrapper, so a fresh
-          # checkout has no ./gradlew. Recreate it at the version the project
-          # pins rather than using whatever gradle the runner ships.
-          GRADLE_VERSION=$(sed -n 's|.*gradle-\([0-9.]*\)-all\.zip|\1|p' \
+          # checkout has no ./gradlew. `gradle wrapper` is not a way out: it
+          # configures the project with the runner's Gradle (9.x) first, and AGP
+          # 8.x cannot load there. Fetch the distribution this project pins and
+          # run that. The version is READ from the wrapper properties rather
+          # than repeated here, so the two cannot drift apart.
+          GRADLE_VERSION=$(sed -nE 's|.*/gradle-([0-9.]+)-(all|bin)\.zip|\1|p' \
             gradle/wrapper/gradle-wrapper.properties)
+          test -n "$GRADLE_VERSION" || {
+            echo "could not read the pinned Gradle version"; exit 1; }
           echo "pinned gradle: $GRADLE_VERSION"
-          gradle wrapper --gradle-version "$GRADLE_VERSION"
-          ./gradlew testDebugUnitTest
+          curl -sSLo /tmp/gradle.zip \
+            "https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip"
+          unzip -q /tmp/gradle.zip -d /tmp
+          "/tmp/gradle-$GRADLE_VERSION/bin/gradle" testDebugUnitTest
       - name: End-to-end on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -200,30 +207,20 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - uses: browser-actions/setup-chrome@v1
-        id: chrome
-        with:
-          chrome-version: stable
-          install-chromedriver: true
+      # Matches chromedriver to the Chrome already on the runner. Installing
+      # our own Chrome does not work: with `--browser-name=chrome` it is
+      # CHROMEDRIVER that launches the browser, from its own default path, so
+      # CHROME_EXECUTABLE is ignored and the majors diverge again.
+      - uses: nanasess/setup-chromedriver@v2
       - name: End-to-end
         working-directory: example
-        env:
-          # `flutter drive` launches whatever Chrome it finds, which is the
-          # runner's preinstalled one — a different major version from the
-          # chromedriver the step above installed, and chromedriver refuses a
-          # session across majors. Point Flutter at the matching pair.
-          CHROME_EXECUTABLE: ${{ steps.chrome.outputs.chrome-path }}
-        # `flutter drive` is the only runner the Flutter SDK supports for
-        # integration_test on web. It prints no test COUNTS, so a suite that
-        # fails to start still reports "All tests passed" — the web tests
-        # deliberately have no setUp for that reason.
         run: |
           flutter pub get
           # Printed so a future version drift names itself in the log instead of
           # surfacing as SessionNotCreatedException.
-          "${{ steps.chrome.outputs.chrome-path }}" --version
-          "${{ steps.chrome.outputs.chromedriver-path }}" --version
-          "${{ steps.chrome.outputs.chromedriver-path }}" --port=4444 &
+          google-chrome --version
+          chromedriver --version
+          chromedriver --port=4444 &
           sleep 3
           flutter drive \
             --driver=test_driver/integration_test.dart \
