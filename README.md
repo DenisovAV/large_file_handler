@@ -72,11 +72,15 @@ Future<void> copyAssetToLocalWithProgress() async {
     const targetPath = 'example.json';
 
     final progressStream = LargeFileHandler().copyAssetToLocalStorageWithProgress(assetName: assetName, targetPath: targetPath);
-    progressStream.listen((progress) {
-      print('Progress: $progress%');
-    });
+    progressStream.listen(
+      (progress) => print('Progress: $progress%'),
+      // Required: a failure arrives on the STREAM, asynchronously. The
+      // try/catch below returns long before that, so it cannot see it.
+      onError: (Object e) => status = 'Failed to copy asset: $e',
+    );
   } on PlatformException catch (e) {
-    status = 'Failed to copy asset: ${e.message}';
+    // Only the synchronous part of starting the copy lands here.
+    status = 'Failed to start the copy: ${e.message}';
   }
 }
 ```
@@ -124,14 +128,34 @@ Future<void> copyCloudToLocal() async {
     const targetPath = 'example.json';
 
     final progressStream = LargeFileHandler().copyNetworkAssetToLocalStorageWithProgress(assetUrl: url, targetPath: targetPath);
-    progressStream.listen((progress) {
-      print('Download progress: $progress%');
-    });
+    progressStream.listen(
+      (progress) => print('Download progress: $progress%'),
+      // Required: a failure arrives on the STREAM, asynchronously. The
+      // try/catch below returns long before that, so it cannot see it.
+      onError: (Object e) => status = 'Failed to download asset: $e',
+    );
   } on PlatformException catch (e) {
-    status = 'Failed to download asset: ${e.message}';
+    // Only the synchronous part of starting the download lands here.
+    status = 'Failed to start the download: ${e.message}';
   }
 }
 ```
+
+## Error handling
+
+Every method reports a failure as a `PlatformException`, on every platform — the
+one-shot calls by throwing, the `WithProgress` calls by delivering the error to
+the stream. Give `listen` an `onError`: a `try`/`catch` around the call cannot
+see a stream error, because it returns before the error is produced.
+
+Before 0.5.1 this was not true in two places. On Windows and Linux a missing
+asset surfaced as `rootBundle`'s `FlutterError`, which `on PlatformException`
+never matched, and a failure in the `WithProgress` calls closed the stream
+without an error at all — a listener saw a clean completion and had no way to
+learn the copy had not happened.
+
+On web every file-system method fails with `UnsupportedError` by design: a
+browser has no application documents directory.
 
 ## Supported Platforms
 
