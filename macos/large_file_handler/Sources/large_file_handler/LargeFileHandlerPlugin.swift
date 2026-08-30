@@ -122,11 +122,57 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
     return args
   }
 
+  /// Resolves a Flutter asset key to an absolute path inside the app bundle.
+  ///
+  /// `FlutterDartProject.lookupKey(forAsset:)` documents its result as "the file
+  /// name to be used for lookup in the main bundle", but the SHAPE of that key
+  /// depends on whether the `io.flutter.flutter.app` bundle exists. On macOS it
+  /// does, and the key is then a path relative to the bundle ROOT that routes
+  /// through App.framework:
+  ///   Contents/Frameworks/App.framework/Resources/flutter_assets/assets/x.json
+  /// `path(forResource:ofType:)` only ever searches Contents/Resources, so it
+  /// returned nil for that key and every macOS asset copy failed with 404.
+  ///
+  /// Both shapes are resolved, `path(forResource:)` FIRST so any layout that
+  /// already worked keeps resolving through exactly the call it used before.
+  ///
+  /// The lookups are injected because only ONE of the two branches is reachable
+  /// on a real macOS host: the key shape is chosen by the engine, not by the
+  /// caller, so the resources-relative branch — the one that must not regress —
+  /// cannot be exercised end-to-end and is covered by RunnerTests instead.
+  static func resolveAssetPath(
+    _ assetKey: String,
+    resourceLookup: (String) -> String?,
+    bundleRoot: String,
+    fileExists: (String) -> Bool
+  ) throws -> String {
+    if let fromResources = resourceLookup(assetKey) {
+      return fromResources
+    }
+    let fromBundleRoot = (bundleRoot as NSString).appendingPathComponent(assetKey)
+    if fileExists(fromBundleRoot) {
+      return fromBundleRoot
+    }
+    throw NSError(
+      domain: "Asset not found", code: 404,
+      userInfo: [
+        NSLocalizedDescriptionKey:
+          "no asset for key \(assetKey): not found by path(forResource:) "
+          + "and nothing at \(fromBundleRoot)"
+      ])
+  }
+
+  private func resolveAssetPath(_ assetKey: String) throws -> String {
+    try Self.resolveAssetPath(
+      assetKey,
+      resourceLookup: { Bundle.main.path(forResource: $0, ofType: nil) },
+      bundleRoot: Bundle.main.bundlePath,
+      fileExists: { FileManager.default.fileExists(atPath: $0) })
+  }
+
   private func copyAsset(assetName: String, targetPath: String) throws {
     let flutterAssetPath = FlutterDartProject.lookupKey(forAsset: assetName)
-    guard let bundleAssetPath = Bundle.main.path(forResource: flutterAssetPath, ofType: nil) else {
-      throw NSError(domain: "Asset not found", code: 404, userInfo: nil)
-    }
+    let bundleAssetPath = try resolveAssetPath(flutterAssetPath)
 
     try copyFile(from: bundleAssetPath, to: targetPath)
   }
@@ -134,9 +180,7 @@ private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterR
   private func copyAssetWithProgress(assetName: String, targetPath: String, result: @escaping FlutterResult) {
     do {
       let flutterAssetPath = FlutterDartProject.lookupKey(forAsset: assetName)
-      guard let bundleAssetPath = Bundle.main.path(forResource: flutterAssetPath, ofType: nil) else {
-        throw NSError(domain: "Asset not found", code: 404, userInfo: nil)
-      }
+      let bundleAssetPath = try resolveAssetPath(flutterAssetPath)
 
       let totalBytes = try FileManager.default.attributesOfItem(atPath: bundleAssetPath)[.size] as? Int64 ?? 0
       var bytesWritten: Int64 = 0

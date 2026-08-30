@@ -54,6 +54,12 @@ android {
     }
 
     testOptions {
+        // Without this, every android.jar method THROWS "not mocked" instead of
+        // returning a default. This plugin builds `Handler(Looper.getMainLooper())`
+        // as a field, so merely CONSTRUCTING it blew up — the unit test that
+        // shipped here could never have run, on any machine.
+        unitTests.returnDefaultValues = true
+
         unitTests.all {
             useJUnitPlatform()
 

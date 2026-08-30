@@ -141,11 +141,50 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
     return args
   }
 
+  /// Resolves a Flutter asset key to an absolute path inside the app bundle.
+  ///
+  /// Kept byte-for-byte in step with the macOS plugin. `lookupKey(forAsset:)`
+  /// documents its result as "the file name to be used for lookup in the main
+  /// bundle", but the SHAPE of that key depends on whether the
+  /// `io.flutter.flutter.app` bundle exists — when it does, the key is a path
+  /// relative to the bundle ROOT, which `path(forResource:ofType:)` can never
+  /// resolve because it only ever searches the bundle's Resources directory.
+  /// That is what broke every macOS asset copy (issue #10). iOS resolves
+  /// through the first branch today; the second is here so the two plugins
+  /// cannot drift apart the way they already had.
+  static func resolveAssetPath(
+    _ assetKey: String,
+    resourceLookup: (String) -> String?,
+    bundleRoot: String,
+    fileExists: (String) -> Bool
+  ) throws -> String {
+    if let fromResources = resourceLookup(assetKey) {
+      return fromResources
+    }
+    let fromBundleRoot = (bundleRoot as NSString).appendingPathComponent(assetKey)
+    if fileExists(fromBundleRoot) {
+      return fromBundleRoot
+    }
+    throw NSError(
+      domain: "Asset not found", code: 404,
+      userInfo: [
+        NSLocalizedDescriptionKey:
+          "no asset for key \(assetKey): not found by path(forResource:) "
+          + "and nothing at \(fromBundleRoot)"
+      ])
+  }
+
+  private func resolveAssetPath(_ assetKey: String) throws -> String {
+    try Self.resolveAssetPath(
+      assetKey,
+      resourceLookup: { Bundle.main.path(forResource: $0, ofType: nil) },
+      bundleRoot: Bundle.main.bundlePath,
+      fileExists: { FileManager.default.fileExists(atPath: $0) })
+  }
+
   private func copyAsset(assetName: String, targetPath: String) throws {
     let flutterAssetPath = FlutterDartProject.lookupKey(forAsset: assetName)
-    guard let bundleAssetPath = Bundle.main.path(forResource: flutterAssetPath, ofType: nil) else {
-      throw NSError(domain: "Asset not found", code: 404, userInfo: nil)
-    }
+    let bundleAssetPath = try resolveAssetPath(flutterAssetPath)
 
     try copyFile(from: bundleAssetPath, to: targetPath)
   }
@@ -153,9 +192,7 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
   private func copyAssetWithProgress(assetName: String, targetPath: String, result: @escaping FlutterResult) {
     do {
       let flutterAssetPath = FlutterDartProject.lookupKey(forAsset: assetName)
-      guard let bundleAssetPath = Bundle.main.path(forResource: flutterAssetPath, ofType: nil) else {
-        throw FileError.assetNotFound
-      }
+      let bundleAssetPath = try resolveAssetPath(flutterAssetPath)
 
       try ensureDirectoryExists(for: targetPath)
       try removeExistingFile(at: targetPath)

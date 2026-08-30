@@ -50,7 +50,13 @@ class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.St
             copyStreamToFile(assetStream, targetPath)
             handler.post { result.success(null) }
           } catch (e: IOException) {
-            handler.post { result.error("ERROR", "Failed to copy asset", e) }
+            handler.post {
+              result.error(
+                "ERROR",
+                "Failed to copy asset \"$assetName\": ${e.message}",
+                null
+              )
+            }
           }
         }
       }
@@ -64,7 +70,13 @@ class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.St
             copyStreamToFileWithProgress(assetStream, targetPath, totalBytes)
             handler.post { result.success(null) }
           } catch (e: IOException) {
-            handler.post { result.error("ERROR", "Failed to copy asset", e) }
+            handler.post {
+              result.error(
+                "ERROR",
+                "Failed to copy asset \"$assetName\": ${e.message}",
+                null
+              )
+            }
           }
         }
       }

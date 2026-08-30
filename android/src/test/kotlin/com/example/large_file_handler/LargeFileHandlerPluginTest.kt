@@ -6,22 +6,23 @@ import kotlin.test.Test
 import org.mockito.Mockito
 
 /*
- * This demonstrates a simple unit test of the Kotlin portion of this plugin's implementation.
+ * The template test that shipped here called `getPlatformVersion`, which this
+ * plugin does not implement — `onMethodCall` falls through to
+ * `result.notImplemented()`, so the `verify(success(...))` could never match.
+ * It could not have passed; nothing in this repository ran the native tests.
  *
- * Once you have built the plugin's example app, you can run these tests from the command
- * line by running `./gradlew testDebugUnitTest` in the `example/android/` directory, or
- * you can run them directly from IDEs that support JUnit such as Android Studio.
+ * Run with `./gradlew testDebugUnitTest` from `example/android/`.
  */
 
 internal class LargeFileHandlerPluginTest {
   @Test
-  fun onMethodCall_getPlatformVersion_returnsExpectedValue() {
+  fun onMethodCall_unknownMethod_reportsNotImplemented() {
     val plugin = LargeFileHandlerPlugin()
 
     val call = MethodCall("getPlatformVersion", null)
     val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
     plugin.onMethodCall(call, mockResult)
 
-    Mockito.verify(mockResult).success("Android " + android.os.Build.VERSION.RELEASE)
+    Mockito.verify(mockResult).notImplemented()
   }
 }

@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show ByteData, rootBundle;
+import 'package:flutter/services.dart'
+    show ByteData, PlatformException, rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
@@ -44,7 +45,21 @@ class LargeFileHandlerDesktop extends LargeFileHandlerPlatform {
   Future<void> copyAssetToLocalStorage(
       String assetName, String targetName) async {
     final resolved = await _resolve(targetName);
-    final data = await assetLoader('assets/$assetName');
+    // `rootBundle.load` throws a FlutterError for a missing asset, which is NOT
+    // what a caller of this plugin is told to catch: every native platform
+    // reports through a method channel, so the documented handler is
+    // `on PlatformException`. Letting the FlutterError through meant that on
+    // Windows and Linux the README's own example never caught the failure and
+    // it escaped as an unhandled error. Same contract on every platform.
+    final ByteData data;
+    try {
+      data = await assetLoader('assets/$assetName');
+    } catch (e) {
+      throw PlatformException(
+        code: 'ERROR',
+        message: 'Failed to copy asset "$assetName": $e',
+      );
+    }
     final bytes = data.buffer.asUint8List(
       data.offsetInBytes,
       data.lengthInBytes,

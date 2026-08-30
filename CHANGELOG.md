@@ -1,3 +1,10 @@
+## 0.5.1
+Fixed `copyAssetToLocalStorage` failing with "Asset not found error 404" on every macOS run: the asset key returned by `FlutterDartProject.lookupKey(forAsset:)` is relative to the app bundle root and `pathForResource:` only searches Resources, so it could never resolve (#10, thanks @wilinz).
+
+A missing asset now fails the same way on every platform: Windows and Linux reported `rootBundle`'s FlutterError, which the documented `on PlatformException` handler never caught, and the error message now names the asset instead of a bare 404.
+
+A native failure in the `WithProgress` variants now reaches the returned stream. The `invokeMethod` future was dropped, so the stream simply closed and the error surfaced as an unhandled async error elsewhere — a listener could not detect the failure at all.
+
 ## 0.5.0
 Added macOS, Windows, and Linux support; web now throws UnsupportedError instead of failing to compile. macOS now supports the Swift Package Manager, and the package is WASM-compatible.
 
