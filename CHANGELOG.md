@@ -1,3 +1,6 @@
+## 0.5.2
+Documentation: the README progress examples wrapped `listen` in `try`/`on PlatformException`, which never fires for a stream error — both now pass `onError`. Adds an error-handling section stating the contract 0.5.1 made uniform.
+
 ## 0.5.1
 Fixed `copyAssetToLocalStorage` failing with "Asset not found error 404" on every macOS run: the asset key returned by `FlutterDartProject.lookupKey(forAsset:)` is relative to the app bundle root and `pathForResource:` only searches Resources, so it could never resolve (#10, thanks @wilinz).
 
