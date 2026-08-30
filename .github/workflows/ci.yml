@@ -128,12 +128,24 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Kotlin unit tests
-        working-directory: example/android
+        working-directory: example
         # These need `unitTests.returnDefaultValues`: the plugin holds a
         # `Handler(Looper.getMainLooper())` field, so without it CONSTRUCTING it
         # throws "not mocked" and no Android unit test can run at all.
         run: |
-          cd ../ && flutter pub get && cd android
+          flutter pub get
+          # settings.gradle asserts on `flutter.sdk` in local.properties, which
+          # the Flutter tool writes and `pub get` does not. --config-only
+          # produces it without building an APK.
+          flutter build apk --config-only
+          cd android
+          # Flutter's example template gitignores the Gradle wrapper, so a fresh
+          # checkout has no ./gradlew. Recreate it at the version the project
+          # pins rather than using whatever gradle the runner ships.
+          GRADLE_VERSION=$(sed -n 's|.*gradle-\([0-9.]*\)-all\.zip|\1|p' \
+            gradle/wrapper/gradle-wrapper.properties)
+          echo "pinned gradle: $GRADLE_VERSION"
+          gradle wrapper --gradle-version "$GRADLE_VERSION"
           ./gradlew testDebugUnitTest
       - name: End-to-end on an emulator
         uses: reactivecircus/android-emulator-runner@v2
@@ -189,18 +201,29 @@ jobs:
         with:
           channel: stable
       - uses: browser-actions/setup-chrome@v1
+        id: chrome
         with:
           chrome-version: stable
           install-chromedriver: true
       - name: End-to-end
         working-directory: example
+        env:
+          # `flutter drive` launches whatever Chrome it finds, which is the
+          # runner's preinstalled one — a different major version from the
+          # chromedriver the step above installed, and chromedriver refuses a
+          # session across majors. Point Flutter at the matching pair.
+          CHROME_EXECUTABLE: ${{ steps.chrome.outputs.chrome-path }}
         # `flutter drive` is the only runner the Flutter SDK supports for
         # integration_test on web. It prints no test COUNTS, so a suite that
         # fails to start still reports "All tests passed" — the web tests
         # deliberately have no setUp for that reason.
         run: |
           flutter pub get
-          chromedriver --port=4444 &
+          # Printed so a future version drift names itself in the log instead of
+          # surfacing as SessionNotCreatedException.
+          "${{ steps.chrome.outputs.chrome-path }}" --version
+          "${{ steps.chrome.outputs.chromedriver-path }}" --version
+          "${{ steps.chrome.outputs.chromedriver-path }}" --port=4444 &
           sleep 3
           flutter drive \
             --driver=test_driver/integration_test.dart \
